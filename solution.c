@@ -431,35 +431,121 @@ int iterated_local_search(Instance* instance, Solution* solution, int iterations
     return number_of_evaluations;
 }
 
-void filtrage_offline(Instance *instance, Solution** group_solution, Solution** result_filter, int size_groupe)
+int filtrage_offline(Instance *instance, Solution** group_solution, Solution** result_filter, int size_groupe)
 {
     int index_result = 0;
     int score_bdd[size_groupe][2];
-    int dominate = 0;
+    int is_dominated = 0;
 
+    // Calcul des scores pour toutes les solutions
     for (size_t i = 0; i < size_groupe; i++)
     {
         score_bdd[i][0] = cout_solution(instance, group_solution[i]);
         score_bdd[i][1] = cout_solution_retard(instance, group_solution[i]);
     }
 
+    // Vérifier chaque solution pour voir si elle est dominée
     for (size_t i = 0; i < size_groupe; i++)
     {
-        dominate = 0;
+        is_dominated = 0;
         for (size_t j = 0; j < size_groupe; j++)
         {
-            if(i != j)
+            if (i != j)
             {
-                if(score_bdd[i][0] > score_bdd[j][0] && score_bdd[i][1] > score_bdd[j][1])
+                // j domine i si j est meilleur sur les 2 critères (ou égal partout et strictement meilleur quelque part)
+                if (score_bdd[j][0] <= score_bdd[i][0] && score_bdd[j][1] <= score_bdd[i][1] &&
+                    (score_bdd[j][0] < score_bdd[i][0] || score_bdd[j][1] < score_bdd[i][1]))
                 {
-                    dominate = 1;
+                    is_dominated = 1;
                     break;
                 }
             }
         }
-        if(dominate == 0)
+        // Ajouter la solution au résultat si elle n'est pas dominée
+        if (is_dominated == 0)
         {
             result_filter[index_result++] = group_solution[i];
         }
     }
+
+    return index_result;
+}
+
+/**
+ * @brief Filtre en ligne : maintient une archive de solutions non-dominées
+ *        À chaque nouvelle solution, décide si l'ajouter à l'archive et supprime les solutions dominées
+ * 
+ * @param instance : l'instance du problème
+ * @param archive : tableau des solutions non-dominées
+ * @param archive_size : pointeur sur la taille actuelle de l'archive
+ * @param max_archive_size : taille maximale de l'archive
+ * @param new_solution : la nouvelle solution à traiter
+ * @return int : 1 si la solution a été ajoutée à l'archive, 0 sinon
+ */
+int filtrage_online(Instance *instance, Solution** archive, int* archive_size, 
+                    int max_archive_size, Solution* new_solution)
+{
+    int new_score[2];
+    int is_dominated = 0;
+    int index_to_remove[*archive_size];
+    int nb_to_remove = 0;
+
+    // Calcul des scores de la nouvelle solution
+    new_score[0] = cout_solution(instance, new_solution);
+    new_score[1] = cout_solution_retard(instance, new_solution);
+
+    // Vérifier si la nouvelle solution est dominée par une solution existante
+    for (size_t i = 0; i < *archive_size; i++)
+    {
+        int archive_score[2];
+        archive_score[0] = cout_solution(instance, archive[i]);
+        archive_score[1] = cout_solution_retard(instance, archive[i]);
+
+        // La solution de l'archive domine la nouvelle solution
+        if (archive_score[0] <= new_score[0] && archive_score[1] <= new_score[1] &&
+            (archive_score[0] < new_score[0] || archive_score[1] < new_score[1]))
+        {
+            is_dominated = 1;
+            break;
+        }
+
+        // La nouvelle solution domine la solution de l'archive
+        if (new_score[0] <= archive_score[0] && new_score[1] <= archive_score[1] &&
+            (new_score[0] < archive_score[0] || new_score[1] < archive_score[1]))
+        {
+            index_to_remove[nb_to_remove++] = i;
+        }
+    }
+
+    // Si la nouvelle solution n'est pas dominée
+    if (!is_dominated)
+    {
+        // Supprimer les solutions dominées (en parcourant de la fin pour éviter les décalages)
+        for (int i = nb_to_remove - 1; i >= 0; i--)
+        {
+            int idx = index_to_remove[i];
+            // Décaler les éléments
+            for (int j = idx; j < *archive_size - 1; j++)
+            {
+                archive[j] = archive[j + 1];
+            }
+            (*archive_size)--;
+        }
+
+        // Ajouter la nouvelle solution si l'archive n'est pas pleine
+        if (*archive_size < max_archive_size)
+        {
+            archive[*archive_size] = new_solution;
+            (*archive_size)++;
+            return 1;  // Solution ajoutée
+        }
+        else
+        {
+            // L'archive est pleine : on pourrait implémenter une stratégie de remplacement
+            // Pour l'instant, on rejette la solution
+            return 0;
+        }
+    }
+
+    return 0;  // Solution dominée, pas ajoutée
 }

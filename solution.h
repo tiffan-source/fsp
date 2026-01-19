@@ -18,6 +18,7 @@ typedef enum Operation {
 
 
 Solution* generate_random_solution(Instance* probleme);
+void display_solution(Solution* solution);
 int cout_solution(Instance* probleme, Solution* solutions);
 int cout_solution_retard(Instance* probleme, Solution* solutions);
 void echange(Solution* solution, int pos_job_1, int pos_job_2);

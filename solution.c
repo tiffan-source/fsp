@@ -463,3 +463,12 @@ void filtrage_offline(Instance *instance, Solution** group_solution, Solution** 
         }
     }
 }
+
+void display_solution(Solution* solution)
+{
+    for(int i = 0; i < solution->taille; i++)
+    {
+        printf("%d ", solution->solution[i]);
+    }
+    printf("\n");
+}

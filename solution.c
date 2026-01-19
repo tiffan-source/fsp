@@ -549,3 +549,179 @@ int filtrage_online(Instance *instance, Solution** archive, int* archive_size,
 
     return 0;  // Solution dominée, pas ajoutée
 }
+
+/**
+ * @brief Fonction de coût scalaire combinant makespan et tardiness avec des poids
+ * 
+ * @param instance : l'instance du problème
+ * @param solution : la solution à évaluer
+ * @param weight_makespan : poids pour le makespan (0 à 1)
+ * @param weight_tardiness : poids pour le tardiness (0 à 1)
+ * @return int : coût scalaire
+ */
+int cout_solution_scalaire(Instance* instance, Solution* solution, double weight_makespan, double weight_tardiness)
+{
+    int makespan = cout_solution(instance, solution);
+    int tardiness = cout_solution_retard(instance, solution);
+
+    // Normalisation simple : diviser par les valeurs maximales pour mettre à l'échelle
+    // On utilise une somme pondérée normalisée
+    return (int)(weight_makespan * makespan + weight_tardiness * tardiness);
+}
+
+/**
+ * @brief Algorithme scalaire pour explorer le front Pareto
+ *        Utilise une somme pondérée pour transformer le problème multi-objectifs en mono-objectif
+ * 
+ * @param instance : l'instance du problème
+ * @param archive : archive de solutions non-dominées
+ * @param max_archive_size : taille maximale de l'archive
+ * @param nb_scalarizations : nombre de scalarisations (nombre de vecteurs de poids à tester)
+ * @param operation_type : type d'opérateur à utiliser (ECHANGE ou INSERTION)
+ * @return int : nombre de solutions dans l'archive finale
+ */
+int algo_scalaire(Instance* instance, Solution** archive, int max_archive_size, 
+                  int nb_scalarizations, Operation operation_type)
+{
+    int archive_size = 0;
+
+    printf("===== ALGORITHME SCALAIRE =====\n");
+    printf("Nombre de scalarisations : %d\n\n", nb_scalarizations);
+
+    // Itérer sur différents vecteurs de poids
+    for (int k = 0; k <= nb_scalarizations; k++)
+    {
+        // Définir les poids : w_makespan varie de 0 à 1
+        double weight_makespan = (double)k / nb_scalarizations;
+        double weight_tardiness = 1.0 - weight_makespan;
+
+        printf("Itération %d : w_makespan = %.2f, w_tardiness = %.2f\n", k, weight_makespan, weight_tardiness);
+
+        // Générer une solution initiale aléatoire
+        Solution* current_solution = generate_random_solution(instance);
+
+        int initial_cost = cout_solution_scalaire(instance, current_solution, weight_makespan, weight_tardiness);
+        printf("  Coût initial : %d\n", initial_cost);
+
+        // Appliquer le climber_best sur la fonction scalaire
+        // On modifie temporairement le comportement en gardant la même solution
+        Solution* best_solution = malloc(sizeof(Solution));
+        best_solution->solution = malloc(sizeof(int) * instance->nombre_jobs);
+        best_solution->taille = instance->nombre_jobs;
+        copy_solution(current_solution, best_solution);
+
+        int best_cost = initial_cost;
+        int improvement = 1;
+        int iterations = 0;
+
+        // Recherche locale avec climber_best adapté pour la fonction scalaire
+        while (improvement)
+        {
+            improvement = 0;
+            int best_candidate_cost = best_cost;
+            int best_candidate_index = -1;
+
+            // Générer tous les voisins possibles
+            int operations_number = operation_type == ECHANGE ? 
+                                    best_solution->taille * (best_solution->taille - 1) / 2 : 
+                                    best_solution->taille * (best_solution->taille - 1);
+
+            Solution* candidate = malloc(sizeof(Solution));
+            candidate->solution = malloc(sizeof(int) * best_solution->taille);
+            candidate->taille = best_solution->taille;
+
+            for (int op_idx = 0; op_idx < operations_number; op_idx++)
+            {
+                copy_solution(best_solution, candidate);
+
+                // Générer le voisin
+                if (operation_type == ECHANGE)
+                {
+                    int pos1 = op_idx / best_solution->taille;
+                    int pos2 = op_idx % best_solution->taille;
+                    if (pos2 > pos1)
+                    {
+                        echange(candidate, pos1, pos2);
+                    }
+                    else
+                    {
+                        continue;
+                    }
+                }
+                else
+                {
+                    int pos1 = op_idx / best_solution->taille;
+                    int pos2 = op_idx % best_solution->taille;
+                    if (pos1 != pos2)
+                    {
+                        insere(candidate, pos1, pos2);
+                    }
+                    else
+                    {
+                        continue;
+                    }
+                }
+
+                // Évaluer le voisin avec la fonction scalaire
+                int candidate_cost = cout_solution_scalaire(instance, candidate, weight_makespan, weight_tardiness);
+
+                if (candidate_cost < best_candidate_cost)
+                {
+                    best_candidate_cost = candidate_cost;
+                    best_candidate_index = op_idx;
+                    improvement = 1;
+                }
+            }
+
+            if (improvement)
+            {
+                // Appliquer la meilleure amélioration trouvée
+                if (operation_type == ECHANGE)
+                {
+                    int pos1 = best_candidate_index / best_solution->taille;
+                    int pos2 = best_candidate_index % best_solution->taille;
+                    if (pos2 > pos1)
+                    {
+                        echange(best_solution, pos1, pos2);
+                    }
+                }
+                else
+                {
+                    int pos1 = best_candidate_index / best_solution->taille;
+                    int pos2 = best_candidate_index % best_solution->taille;
+                    if (pos1 != pos2)
+                    {
+                        insere(best_solution, pos1, pos2);
+                    }
+                }
+                best_cost = best_candidate_cost;
+                iterations++;
+            }
+
+            free_solution(candidate);
+        }
+
+        int final_makespan = cout_solution(instance, best_solution);
+        int final_tardiness = cout_solution_retard(instance, best_solution);
+        printf("  Coût final : %d (makespan : %d, tardiness : %d)\n", best_cost, final_makespan, final_tardiness);
+        printf("  Itérations de recherche locale : %d\n", iterations);
+
+        // Ajouter la solution à l'archive via le filtrage en ligne
+        filtrage_online(instance, archive, &archive_size, max_archive_size, best_solution);
+
+        free_solution(current_solution);
+    }
+
+    printf("\n===== RÉSULTATS FINAUX =====\n");
+    printf("Nombre de solutions non-dominées : %d\n\n", archive_size);
+
+    // Afficher l'archive finale
+    for (int i = 0; i < archive_size; i++)
+    {
+        int makespan = cout_solution(instance, archive[i]);
+        int tardiness = cout_solution_retard(instance, archive[i]);
+        printf("Solution %d : makespan = %d, tardiness = %d\n", i + 1, makespan, tardiness);
+    }
+
+    return archive_size;
+}

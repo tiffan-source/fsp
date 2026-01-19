@@ -733,6 +733,15 @@ int algo_scalaire(Instance* instance, Solution** archive, int max_archive_size,
     return archive_size;
 }
 
+void display_solution(Solution* solution)
+{
+    for(int i = 0; i < solution->taille; i++)
+    {
+        printf("%d ", solution->solution[i]);
+    }
+    printf("\n");
+}
+
 int exporter_solutions_gnuplot_flag(Instance* instance, Solution **solutions, int *dominated, int n, const char *filename) {
     FILE *f = fopen(filename, "w");
     if (!f) return 0;

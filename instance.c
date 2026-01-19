@@ -1,5 +1,10 @@
 #include "instance.h"
 
+/**
+ * Charge une instance de problème depuis un fichier
+ * @param filename : chemin du fichier à lire
+ * @return pointeur vers l'Instance allouée, ou NULL en cas d'erreur
+ */
 Instance* load_instance(const char* filename)
 {
     FILE* my_instance_file = NULL;

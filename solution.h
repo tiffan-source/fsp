@@ -9,6 +9,7 @@ typedef struct Solution
 {
     int* solution;
     int taille;
+    int domine;
 } Solution;
 
 typedef enum Operation {
@@ -28,8 +29,9 @@ int climber_first(Instance* instance, Solution* solution, Operation operation_ty
 int climber_best(Instance* instance, Solution* solution, Operation operation_type);
 int iterated_local_search(Instance* instance, Solution* solution, int iterations_max, int force_perturbation, Operation operation_type);
 int filtrage_offline(Instance *instance, Solution** group_solution, Solution** result_filter, int size_groupe);
-int filtrage_online(Instance *instance, Solution** archive, int* archive_size, int max_archive_size, Solution* new_solution);
+int filtrage_online(Instance *instance, Solution** archive, int* archive_size, int max_archive_size, Solution** new_solutions, int new_solutions_size);
 int cout_solution_scalaire(Instance* instance, Solution* solution, double weight_makespan, double weight_tardiness);
 int algo_scalaire(Instance* instance, Solution** archive, int max_archive_size, int nb_scalarizations, Operation operation_type);
+int exporter_solutions_gnuplot_flag(Instance* instance, Solution **solutions, int *dominated, int n, const char *filename);
 
 #endif // SOLUTION_H

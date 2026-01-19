@@ -130,7 +130,7 @@ int cout_solution_retard(Instance* probleme, Solution* solutions)
 
     for (size_t i = 0; i < probleme->nombre_jobs; i++)
     {
-        printf("Job %ld : end at %d -- wish %d -- retard %d \n", solutions->solution[i], previousTime[i], probleme->date_end_jobs_wish[solutions->solution[i]], previousTime[i] - probleme->date_end_jobs_wish[solutions->solution[i]]);
+        // printf("Job %ld : end at %d -- wish %d -- retard %d \n", solutions->solution[i], previousTime[i], probleme->date_end_jobs_wish[solutions->solution[i]], previousTime[i] - probleme->date_end_jobs_wish[solutions->solution[i]]);
         if(previousTime[i] > probleme->date_end_jobs_wish[solutions->solution[i]])
         {
             result += previousTime[i] - probleme->date_end_jobs_wish[solutions->solution[i]];
@@ -461,6 +461,7 @@ int filtrage_offline(Instance *instance, Solution** group_solution, Solution** r
                 }
             }
         }
+        
         // Ajouter la solution au résultat si elle n'est pas dominée
         if (is_dominated == 0)
         {
@@ -483,71 +484,77 @@ int filtrage_offline(Instance *instance, Solution** group_solution, Solution** r
  * @return int : 1 si la solution a été ajoutée à l'archive, 0 sinon
  */
 int filtrage_online(Instance *instance, Solution** archive, int* archive_size, 
-                    int max_archive_size, Solution* new_solution)
+                    int max_archive_size, Solution** new_solutions, int new_solutions_size)
 {
-    int new_score[2];
-    int is_dominated = 0;
-    int index_to_remove[*archive_size];
-    int nb_to_remove = 0;
+    int solutions_added = 0;
 
-    // Calcul des scores de la nouvelle solution
-    new_score[0] = cout_solution(instance, new_solution);
-    new_score[1] = cout_solution_retard(instance, new_solution);
-
-    // Vérifier si la nouvelle solution est dominée par une solution existante
-    for (size_t i = 0; i < *archive_size; i++)
+    // Traiter chaque nouvelle solution
+    for (int sol_idx = 0; sol_idx < new_solutions_size; sol_idx++)
     {
-        int archive_score[2];
-        archive_score[0] = cout_solution(instance, archive[i]);
-        archive_score[1] = cout_solution_retard(instance, archive[i]);
+        Solution* new_solution = new_solutions[sol_idx];
+        int new_score[2];
+        int is_dominated = 0;
+        int index_to_remove[*archive_size];
+        int nb_to_remove = 0;
 
-        // La solution de l'archive domine la nouvelle solution
-        if (archive_score[0] <= new_score[0] && archive_score[1] <= new_score[1] &&
-            (archive_score[0] < new_score[0] || archive_score[1] < new_score[1]))
-        {
-            is_dominated = 1;
-            break;
-        }
+        // Calcul des scores de la nouvelle solution
+        new_score[0] = cout_solution(instance, new_solution);
+        new_score[1] = cout_solution_retard(instance, new_solution);
 
-        // La nouvelle solution domine la solution de l'archive
-        if (new_score[0] <= archive_score[0] && new_score[1] <= archive_score[1] &&
-            (new_score[0] < archive_score[0] || new_score[1] < archive_score[1]))
+        // Vérifier si la nouvelle solution est dominée par une solution existante
+        for (size_t i = 0; i < *archive_size; i++)
         {
-            index_to_remove[nb_to_remove++] = i;
-        }
-    }
+            int archive_score[2];
+            archive_score[0] = cout_solution(instance, archive[i]);
+            archive_score[1] = cout_solution_retard(instance, archive[i]);
 
-    // Si la nouvelle solution n'est pas dominée
-    if (!is_dominated)
-    {
-        // Supprimer les solutions dominées (en parcourant de la fin pour éviter les décalages)
-        for (int i = nb_to_remove - 1; i >= 0; i--)
-        {
-            int idx = index_to_remove[i];
-            // Décaler les éléments
-            for (int j = idx; j < *archive_size - 1; j++)
+            // La solution de l'archive domine la nouvelle solution
+            if (archive_score[0] <= new_score[0] && archive_score[1] <= new_score[1] &&
+                (archive_score[0] < new_score[0] || archive_score[1] < new_score[1]))
             {
-                archive[j] = archive[j + 1];
+                is_dominated = 1;
+                break;
             }
-            (*archive_size)--;
+
+            // La nouvelle solution domine la solution de l'archive
+            if (new_score[0] <= archive_score[0] && new_score[1] <= archive_score[1] &&
+                (new_score[0] < archive_score[0] || new_score[1] < archive_score[1]))
+            {
+                index_to_remove[nb_to_remove++] = i;
+            }
         }
 
-        // Ajouter la nouvelle solution si l'archive n'est pas pleine
-        if (*archive_size < max_archive_size)
+        // Si la nouvelle solution n'est pas dominée
+        if (!is_dominated)
         {
-            archive[*archive_size] = new_solution;
-            (*archive_size)++;
-            return 1;  // Solution ajoutée
-        }
-        else
-        {
-            // L'archive est pleine : on pourrait implémenter une stratégie de remplacement
-            // Pour l'instant, on rejette la solution
-            return 0;
+            // Supprimer les solutions dominées (en parcourant de la fin pour éviter les décalages)
+            for (int i = nb_to_remove - 1; i >= 0; i--)
+            {
+                int idx = index_to_remove[i];
+                // Décaler les éléments
+                for (int j = idx; j < *archive_size - 1; j++)
+                {
+                    archive[j] = archive[j + 1];
+                }
+                (*archive_size)--;
+            }
+
+            // Ajouter la nouvelle solution si l'archive n'est pas pleine
+            if (*archive_size < max_archive_size)
+            {
+                archive[*archive_size] = new_solution;
+                (*archive_size)++;
+                solutions_added++;
+            }
+            else
+            {
+                // L'archive est pleine : on pourrait implémenter une stratégie de remplacement
+                // Pour l'instant, on rejette la solution
+            }
         }
     }
 
-    return 0;  // Solution dominée, pas ajoutée
+    return solutions_added;  // Nombre de solutions ajoutées
 }
 
 /**
@@ -707,7 +714,7 @@ int algo_scalaire(Instance* instance, Solution** archive, int max_archive_size,
         printf("  Itérations de recherche locale : %d\n", iterations);
 
         // Ajouter la solution à l'archive via le filtrage en ligne
-        filtrage_online(instance, archive, &archive_size, max_archive_size, best_solution);
+        filtrage_online(instance, archive, &archive_size, max_archive_size, &best_solution, 1);
 
         free_solution(current_solution);
     }
@@ -724,4 +731,17 @@ int algo_scalaire(Instance* instance, Solution** archive, int max_archive_size,
     }
 
     return archive_size;
+}
+
+int exporter_solutions_gnuplot_flag(Instance* instance, Solution **solutions, int *dominated, int n, const char *filename) {
+    FILE *f = fopen(filename, "w");
+    if (!f) return 0;
+    for (int i = 0; i < n; ++i) {
+        fprintf(f, "%d %d %d\n",
+                cout_solution(instance, solutions[i]),
+                cout_solution_retard(instance, solutions[i]),
+                dominated[i] ? 1 : 0);
+    }
+    fclose(f);
+    return 1;
 }

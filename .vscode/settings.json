@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "*.ejs": "html",
+        "*.dbclient-js": "javascript",
+        "stdlib.h": "c",
+        "instance.h": "c",
+        "stdio.h": "c",
+        "time.h": "c",
+        "cout.h": "c",
+        "echange.h": "c"
+    }
+}

@@ -608,7 +608,6 @@ int algo_scalaire(Instance* instance, Solution** archive, int max_archive_size,
         Solution* current_solution = generate_random_solution(instance);
 
         int initial_cost = cout_solution_scalaire(instance, current_solution, weight_makespan, weight_tardiness);
-        printf("  Coût initial : %d\n", initial_cost);
 
         // Appliquer le climber_best sur la fonction scalaire
         // On modifie temporairement le comportement en gardant la même solons dans l'archive fution
@@ -710,7 +709,6 @@ int algo_scalaire(Instance* instance, Solution** archive, int max_archive_size,
 
         int final_makespan = cout_solution(instance, best_solution);
         int final_tardiness = cout_solution_retard(instance, best_solution);
-        printf("  Coût final : %d (makespan : %d, tardiness : %d)\n", best_cost, final_makespan, final_tardiness);
         printf("  Itérations de recherche locale : %d\n", iterations);
 
         // Ajouter la solution à l'archive via le filtrage en ligne
@@ -781,8 +779,8 @@ int algo_pareto(Instance* instance, Solution** archive, int max_archive_size, Op
     int initial_tardiness = cout_solution_retard(instance, initial_solution);
     printf("Solution initiale : makespan = %d, tardiness = %d\n\n", initial_makespan, initial_tardiness);
     
-    // Ajouter la solution initiale à l'archive
-    archive[archive_size++] = initial_solution;
+    // Ajouter la solution initiale à l'archive via filtrage online
+    filtrage_online(instance, archive, &archive_size, max_archive_size, &initial_solution, 1);
     
     // Étape 2: Itérer jusqu'à convergence
     while (improvement && iteration < max_iterations)
@@ -791,12 +789,14 @@ int algo_pareto(Instance* instance, Solution** archive, int max_archive_size, Op
         iteration++;
         printf("Itération %d : Archive size = %d\n", iteration, archive_size);
         
+        int archive_size_before = archive_size;
+        
         // Créer un tableau temporaire pour les nouveaux voisins
         Solution** new_neighbors = malloc(sizeof(Solution*) * max_archive_size * 100);
         int neighbors_count = 0;
         
         // Étape 3: Pour chaque solution dans l'archive, générer les voisins
-        for (int sol_idx = 0; sol_idx < archive_size && neighbors_count < max_archive_size * 100; sol_idx++)
+        for (int sol_idx = 0; sol_idx < archive_size_before && neighbors_count < max_archive_size * 100; sol_idx++)
         {
             Solution* current_solution = archive[sol_idx];
             int operations_number = operation_type == ECHANGE ? 
@@ -846,36 +846,19 @@ int algo_pareto(Instance* instance, Solution** archive, int max_archive_size, Op
         
         printf("  Voisins générés : %d\n", neighbors_count);
         
-        // Étape 4: Filtrer l'ensemble complet (archive + nouveaux voisins)
-        Solution** combined = malloc(sizeof(Solution*) * (archive_size + neighbors_count));
-        for (int i = 0; i < archive_size; i++)
-        {
-            combined[i] = archive[i];
-        }
-        for (int i = 0; i < neighbors_count; i++)
-        {
-            combined[archive_size + i] = new_neighbors[i];
-        }
+        // Étape 4: Ajouter les voisins à l'archive via filtrage en ligne
+        int solutions_added = filtrage_online(instance, archive, &archive_size, max_archive_size, new_neighbors, neighbors_count);
         
-        Solution** filtered = malloc(sizeof(Solution*) * (archive_size + neighbors_count));
-        int filtered_size = filtrage_offline(instance, combined, filtered, archive_size + neighbors_count);
-        
-        printf("  Solutions après filtrage : %d\n", filtered_size);
+        printf("  Solutions ajoutées à l'archive : %d\n", solutions_added);
+        printf("  Solutions après filtrage : %d\n", archive_size);
         
         // Vérifier s'il y a une amélioration
-        if (filtered_size > archive_size)
+        if (archive_size > archive_size_before)
         {
             improvement = 1;
-            archive_size = filtered_size > max_archive_size ? max_archive_size : filtered_size;
-            
-            // Copier les solutions filtrées dans l'archive
-            for (int i = 0; i < archive_size; i++)
-            {
-                archive[i] = filtered[i];
-            }
         }
         
-        // Libérer la mémoire temporaire
+        // Libérer la mémoire temporaire des voisins non ajoutés
         for (int i = 0; i < neighbors_count; i++)
         {
             // Ne pas libérer si la solution est dans l'archive
@@ -895,8 +878,6 @@ int algo_pareto(Instance* instance, Solution** archive, int max_archive_size, Op
         }
         
         free(new_neighbors);
-        free(combined);
-        free(filtered);
     }
     
     printf("\n===== RÉSULTATS FINAUX =====\n");

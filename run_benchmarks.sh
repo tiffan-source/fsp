@@ -9,7 +9,7 @@ echo ""
 
 # Compiler la version Pareto/Scalaire
 echo "[1/2] Compilation de prog (Pareto & Scalaire)..."
-gcc -o prog main.c solution.c instance.c helper.c test.c -lm
+gcc -Ofast -o prog main.c solution.c instance.c helper.c test.c -lm
 if [ $? -eq 0 ]; then
     echo "✓ Compilation de prog réussie"
 else
@@ -21,7 +21,7 @@ echo ""
 
 # Compiler la version Climbers
 echo "[2/2] Compilation de prog_climbers (Climber algorithms)..."
-gcc -o prog_climbers main_climbers.c solution.c instance.c helper.c test.c -lm
+gcc -Ofast -o prog_climbers main_climbers.c solution.c instance.c helper.c test.c -lm
 if [ $? -eq 0 ]; then
     echo "✓ Compilation de prog_climbers réussie"
 else

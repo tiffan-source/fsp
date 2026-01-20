@@ -7,56 +7,40 @@ int main(int argc, char *argv[])
 {
     Instance* test = load_instance(argv[1]);
 
+    Solution* archives[500];
+    int archive_size = 0;
     Solution * solutions[500];
-    Solution * filtered_solutions[500];
 
     for (size_t i = 0; i < 500; i++)
     {
         solutions[i] = generate_random_solution(test);
     }
 
-    int num_filtered = filtrage_offline(test, solutions, filtered_solutions, 500);
+    // int num_filtered = algo_scalaire(test, archives, 500, 100, ECHANGE);
+    int num_filtered = algo_pareto(test, archives, 500, ECHANGE);
 
     int dominated[500];
-    // all filtered_solutions are non dominated
-    for (size_t i = 0; i < num_filtered; i++)
+    // all archive are non dominated
+    for (int i = 0; i < num_filtered; i++)
     {
         dominated[i] = 0;
     }
 
-    exporter_solutions_gnuplot_flag(test, filtered_solutions, dominated, num_filtered, "output.gnuplot");
+    exporter_solutions_gnuplot_flag(test, archives, dominated, num_filtered, "output4.gnuplot");
 
-    // Only free solutions that are NOT in filtered_solutions
-    int is_filtered[500];
-    for (size_t i = 0; i < 500; i++)
+    // loop over archives elements and display them
+    printf("Final Archive Solutions:\n");
+    for (int i = 0; i < num_filtered; i++)
     {
-        is_filtered[i] = 0;
-    }
-    
-    for (size_t i = 0; i < num_filtered; i++)
-    {
-        for (size_t j = 0; j < 500; j++)
-        {
-            if (solutions[j] == filtered_solutions[i])
-            {
-                is_filtered[j] = 1;
-                break;
-            }
-        }
+        int makespan = cout_solution(test, archives[i]);
+        int tardiness = cout_solution_retard(test, archives[i]);
+        printf("Solution %d: Makespan = %d, Tardiness = %d\n", i, makespan, tardiness);
     }
 
+    // Free all solutions (archives contain pointers to some of them)
     for (size_t i = 0; i < 500; i++)
     {
-        if (!is_filtered[i])
-        {
-            free_solution(solutions[i]);
-        }
-    }
-    
-    // Free filtered solutions
-    for (size_t i = 0; i < num_filtered; i++)
-    {
-        free_solution(filtered_solutions[i]);
+        free_solution(solutions[i]);
     }
     
     return 0;

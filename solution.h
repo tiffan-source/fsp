@@ -34,5 +34,5 @@ int filtrage_online(Instance *instance, Solution** archive, int* archive_size, i
 int cout_solution_scalaire(Instance* instance, Solution* solution, double weight_makespan, double weight_tardiness);
 int algo_scalaire(Instance* instance, Solution** archive, int max_archive_size, int nb_scalarizations, Operation operation_type);
 int exporter_solutions_gnuplot_flag(Instance* instance, Solution **solutions, int *dominated, int n, const char *filename);
-
+int algo_pareto(Instance* instance, Solution** archive, int max_archive_size, Operation operation_type);
 #endif // SOLUTION_H

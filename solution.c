@@ -771,111 +771,145 @@ int algo_pareto(Instance* instance, Solution** archive, int max_archive_size, Op
     printf("===== ALGORITHME PARETO LOCAL SEARCH =====\n");
     
     int archive_size = 0;
-    // visited[i] = 1 si la solution i de l'archive a déjà eu son voisinage exploré
-    int* visited = calloc(max_archive_size, sizeof(int)); 
-    
-    // 1. Initialisation : Une solution aléatoire
-    Solution* init_sol = generate_random_solution(instance);
-    filtrage_online(instance, archive, &archive_size, max_archive_size, &init_sol, 1);
-    
-    int new_solutions_found = 1;
     int iteration = 0;
-
-    while (new_solutions_found)
+    int improvement = 1;
+    int max_iterations = 100; // Limite d'itérations pour éviter une boucle infinie
+    
+    // Étape 1: Générer une solution initiale aléatoire
+    Solution* initial_solution = generate_random_solution(instance);
+    int initial_makespan = cout_solution(instance, initial_solution);
+    int initial_tardiness = cout_solution_retard(instance, initial_solution);
+    printf("Solution initiale : makespan = %d, tardiness = %d\n\n", initial_makespan, initial_tardiness);
+    
+    // Ajouter la solution initiale à l'archive
+    archive[archive_size++] = initial_solution;
+    
+    // Étape 2: Itérer jusqu'à convergence
+    while (improvement && iteration < max_iterations)
     {
+        improvement = 0;
         iteration++;
-        new_solutions_found = 0;
-        printf("Itération %d - Taille archive : %d\n", iteration, archive_size);
-
-        // On fait une copie de la taille actuelle car l'archive peut grandir pendant la boucle
-        int current_size = archive_size;
-
-        for (int i = 0; i < current_size; i++)
+        printf("Itération %d : Archive size = %d\n", iteration, archive_size);
+        
+        // Créer un tableau temporaire pour les nouveaux voisins
+        Solution** new_neighbors = malloc(sizeof(Solution*) * max_archive_size * 100);
+        int neighbors_count = 0;
+        
+        // Étape 3: Pour chaque solution dans l'archive, générer les voisins
+        for (int sol_idx = 0; sol_idx < archive_size && neighbors_count < max_archive_size * 100; sol_idx++)
         {
-            // Si cette solution a déjà été explorée, on passe
-            if (visited[i]) continue;
-
-            // Marquer comme visitée
-            visited[i] = 1;
-
-            Solution* current = archive[i];
+            Solution* current_solution = archive[sol_idx];
+            int operations_number = operation_type == ECHANGE ? 
+                                    current_solution->taille * (current_solution->taille - 1) / 2 : 
+                                    current_solution->taille * (current_solution->taille - 1);
             
-            // Génération de TOUT le voisinage
-            int operations_number = (operation_type == ECHANGE) ? 
-                                    instance->nombre_jobs * (instance->nombre_jobs - 1) / 2 : 
-                                    instance->nombre_jobs * (instance->nombre_jobs - 1);
-
-            // Créer un buffer pour générer les voisins
-            Solution* neighbor = malloc(sizeof(Solution));
-            neighbor->solution = malloc(sizeof(int) * instance->nombre_jobs);
-            neighbor->taille = instance->nombre_jobs;
-
-            // Pour chaque voisin
-            int op_count = 0;
-            for (int p1 = 0; p1 < instance->nombre_jobs; p1++)
+            // Générer tous les voisins de la solution courante
+            if (operation_type == ECHANGE)
             {
-                // Limites pour p2 selon le type d'opération
-                int p2_start = (operation_type == ECHANGE) ? p1 + 1 : 0;
-                
-                for (int p2 = p2_start; p2 < instance->nombre_jobs; p2++)
+                for (int pos1 = 0; pos1 < current_solution->taille && neighbors_count < max_archive_size * 100; pos1++)
                 {
-                    if (operation_type == INSERTION && p1 == p2) continue;
-
-                    copy_solution(current, neighbor);
-
-                    if (operation_type == ECHANGE) echange(neighbor, p1, p2);
-                    else insere(neighbor, p1, p2);
-
-                    // Tenter d'ajouter ce voisin à l'archive
-                    // Note: on doit passer un tableau de pointeurs
-                    Solution* neighbor_copy = malloc(sizeof(Solution));
-                    neighbor_copy->taille = neighbor->taille;
-                    neighbor_copy->solution = malloc(sizeof(int) * neighbor->taille);
-                    copy_solution(neighbor, neighbor_copy);
-                    
-                    int initial_archive_size = archive_size;
-                    int added = filtrage_online(instance, archive, &archive_size, max_archive_size, &neighbor_copy, 1);
-                    
-                    if (added) {
-                        new_solutions_found = 1;
+                    for (int pos2 = pos1 + 1; pos2 < current_solution->taille && neighbors_count < max_archive_size * 100; pos2++)
+                    {
+                        // Créer un voisin par échange
+                        Solution* neighbor = malloc(sizeof(Solution));
+                        neighbor->solution = malloc(sizeof(int) * current_solution->taille);
+                        neighbor->taille = current_solution->taille;
+                        copy_solution(current_solution, neighbor);
                         
-                        // Si une solution a été ajoutée, il faut potentiellement redimensionner visited
-                        // ou gérer le décalage si des solutions ont été supprimées par dominance
-                        if (archive_size > max_archive_size) {
-                            // Cas critique (ne devrait pas arriver avec une logique stricte)
-                        }
-                    } else {
-                        // Si non ajouté, on libère la mémoire de la copie
-                        free_solution(neighbor_copy);
+                        echange(neighbor, pos1, pos2);
+                        new_neighbors[neighbors_count++] = neighbor;
                     }
-                    
-                    // Gestion intelligente de visited :
-                    // Si filtrage_online a supprimé des solutions dominées qui étaient AVANT l'index i,
-                    // cela décale tout. Pour simplifier ici, on accepte une légère inefficacité
-                    // ou on réinitialise visited pour les nouveaux (0 par défaut via calloc pour l'extension)
                 }
             }
-            free_solution(neighbor);
+            else
+            {
+                // INSERTION
+                for (int pos1 = 0; pos1 < current_solution->taille && neighbors_count < max_archive_size * 100; pos1++)
+                {
+                    for (int pos2 = 0; pos2 < current_solution->taille && neighbors_count < max_archive_size * 100; pos2++)
+                    {
+                        if (pos1 != pos2)
+                        {
+                            // Créer un voisin par insertion
+                            Solution* neighbor = malloc(sizeof(Solution));
+                            neighbor->solution = malloc(sizeof(int) * current_solution->taille);
+                            neighbor->taille = current_solution->taille;
+                            copy_solution(current_solution, neighbor);
+                            
+                            insere(neighbor, pos1, pos2);
+                            new_neighbors[neighbors_count++] = neighbor;
+                        }
+                    }
+                }
+            }
         }
         
-        // Nettoyage tableau visited : si archive_size a diminué, pas grave.
-        // Si elle a augmenté, les nouveaux indices ont 0 par défaut (si on réallouait proprement, 
-        // mais ici on a alloué max_archive_size dès le début).
-        // Le vrai défi est que filtrage_online supprime des éléments et décale le tableau archive.
-        // Pour une implémentation robuste, on devrait réinitialiser visited pour les éléments qui ont bougé.
-        // Simplification : On remet visited à 0 pour toute l'archive à chaque itération majeure
-        // et on ne traite que les solutions non marquées dans la boucle principale ?
-        // Mieux : On relance la boucle tant que 'new_solutions_found' est vrai, 
-        // mais on doit savoir QUI est nouveau.
+        printf("  Voisins générés : %d\n", neighbors_count);
         
-        // Approche simplifiée robuste :
-        // À la fin d'une itération complète sur l'archive courante, si on a trouvé de nouvelles solutions,
-        // on reset visited à 0 pour tout le monde pour être sûr de ré-explorer les zones prometteuses 
-        // (parfois utile si une ancienne solution devient sub-optimale mais ses voisins sont bons)
-        // OU on garde la liste des "nouveaux" séparément. 
-        // ICI : l'implémentation standard PLS explore une fois chaque solution qui rentre dans l'archive.
+        // Étape 4: Filtrer l'ensemble complet (archive + nouveaux voisins)
+        Solution** combined = malloc(sizeof(Solution*) * (archive_size + neighbors_count));
+        for (int i = 0; i < archive_size; i++)
+        {
+            combined[i] = archive[i];
+        }
+        for (int i = 0; i < neighbors_count; i++)
+        {
+            combined[archive_size + i] = new_neighbors[i];
+        }
+        
+        Solution** filtered = malloc(sizeof(Solution*) * (archive_size + neighbors_count));
+        int filtered_size = filtrage_offline(instance, combined, filtered, archive_size + neighbors_count);
+        
+        printf("  Solutions après filtrage : %d\n", filtered_size);
+        
+        // Vérifier s'il y a une amélioration
+        if (filtered_size > archive_size)
+        {
+            improvement = 1;
+            archive_size = filtered_size > max_archive_size ? max_archive_size : filtered_size;
+            
+            // Copier les solutions filtrées dans l'archive
+            for (int i = 0; i < archive_size; i++)
+            {
+                archive[i] = filtered[i];
+            }
+        }
+        
+        // Libérer la mémoire temporaire
+        for (int i = 0; i < neighbors_count; i++)
+        {
+            // Ne pas libérer si la solution est dans l'archive
+            int is_in_archive = 0;
+            for (int j = 0; j < archive_size; j++)
+            {
+                if (archive[j] == new_neighbors[i])
+                {
+                    is_in_archive = 1;
+                    break;
+                }
+            }
+            if (!is_in_archive)
+            {
+                free_solution(new_neighbors[i]);
+            }
+        }
+        
+        free(new_neighbors);
+        free(combined);
+        free(filtered);
     }
-
-    free(visited);
+    
+    printf("\n===== RÉSULTATS FINAUX =====\n");
+    printf("Nombre d'itérations : %d\n", iteration);
+    printf("Nombre de solutions non-dominées : %d\n\n", archive_size);
+    
+    // Afficher l'archive finale
+    for (int i = 0; i < archive_size; i++)
+    {
+        int makespan = cout_solution(instance, archive[i]);
+        int tardiness = cout_solution_retard(instance, archive[i]);
+        printf("Solution %d : makespan = %d, tardiness = %d\n", i + 1, makespan, tardiness);
+    }
+    
     return archive_size;
 }

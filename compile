@@ -1,0 +1,8 @@
+# Version Pareto & Scalaire
+gcc -o prog main.c solution.c instance.c helper.c test.c -lm && ./prog
+
+# Version Climbers
+gcc -o prog_climbers main_climbers.c solution.c instance.c helper.c test.c -lm && ./prog_climbers
+
+# Analyser les résultats
+python3 analyze_pareto.py
